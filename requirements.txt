@@ -1,4 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pymysql
+python-multipart
+websockets
+asyncio
+pydantic
+mysql-connector-python
+requests
 python-dotenv
-psycopg2-binary
-supabase
-supabase
