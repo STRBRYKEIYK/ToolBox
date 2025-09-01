@@ -62,6 +62,30 @@ if "%1"=="run" (
     goto :eof
 )
 
+if "%1"=="run_secure" (
+    echo Starting WorkBox server with HTTPS...
+    %PYTHON_PATH% main.py --secure
+    goto :eof
+)
+
+if "%1"=="network" (
+    echo Running network connectivity test...
+    %PYTHON_PATH% network_test.py
+    goto :eof
+)
+
+if "%1"=="connection" (
+    echo Running connection checker...
+    .\check_connection.bat
+    goto :eof
+)
+
+if "%1"=="mysql_network" (
+    echo Configuring MySQL for network access...
+    .\mysql_network_setup.bat
+    goto :eof
+)
+
 if "%1"=="manage" (
     echo Running connection manager...
     %PYTHON_PATH% manage_connection.py
@@ -94,12 +118,15 @@ echo 1. Install dependencies
 echo 2. Setup MySQL connection
 echo 3. Initialize database
 echo 4. Start WorkBox server
-echo 5. Manage database connection
-echo 6. Run migrations
+echo 5. Start WorkBox server with HTTPS
+echo 6. Reserved
+echo 7. Configure MySQL for network access
+echo 8. Manage database connection
+echo 9. Run migrations
 echo 0. Exit
 echo.
 
-set /p choice=Enter your choice (0-6): 
+set /p choice=Enter your choice (0-9): 
 
 if "%choice%"=="1" (
     %PYTHON_PATH% -m pip install -r requirements.txt
@@ -110,8 +137,14 @@ if "%choice%"=="1" (
 ) else if "%choice%"=="4" (
     %PYTHON_PATH% main.py
 ) else if "%choice%"=="5" (
-    %PYTHON_PATH% manage_connection.py
+    %PYTHON_PATH% main.py --secure
 ) else if "%choice%"=="6" (
+    REM Skip network test option as it's now integrated into mysql_network_setup.bat
+) else if "%choice%"=="7" (
+    call mysql_network_setup.bat
+) else if "%choice%"=="8" (
+    %PYTHON_PATH% manage_connection.py
+) else if "%choice%"=="9" (
     echo Migration options:
     echo  a. Setup migration system
     echo  b. Create new migration

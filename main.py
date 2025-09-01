@@ -21,10 +21,17 @@ WebSocket endpoint: ws://localhost:8000/ws
 import uvicorn
 
 if __name__ == "__main__":
+    import socket
+    
+    # Get the local IP address
+    hostname = socket.gethostname()
+    local_ip = socket.gethostbyname(hostname)
+    
     print("🚀 Starting WorkBox Inventory Management Server...")
     print("📡 Server will be available at: http://localhost:8000")
-    print("🔌 WebSocket endpoint: ws://localhost:8000/ws")
-    print("📖 API documentation: http://localhost:8000/docs")
+    print(f"📡 Network access at: http://{local_ip}:8000")
+    print(f"🔌 WebSocket endpoint: ws://{local_ip}:8000/ws")
+    print(f"📖 API documentation: http://{local_ip}:8000/docs")
     print("🔄 Realtime updates enabled")
     print("\nPress Ctrl+C to stop the server\n")
 
