@@ -13,6 +13,7 @@ A FastAPI-based WebSocket application for real-time inventory management with My
 - **Database migration system** for schema evolution
 - **MySQL database** with SQLAlchemy ORM
 - **Production-ready** with proper error handling and logging
+- **Utility scripts** for setup, testing, and maintenance
 
 ## System Requirements
 
@@ -76,12 +77,22 @@ A FastAPI-based WebSocket application for real-time inventory management with My
 4. **Initialize the database:**
 
    ```bash
-   python init_db.py
+   python scripts/init_db.py
+   ```
+
+5. **Access the utility tools menu:**
+
+   ```bash
+   # On Windows:
+   tools.bat
+   
+   # On any platform:
+   python scripts/tools.py
    ```
 
 ## Configuration
 
-The application uses a `.env` file for configuration, which is created by the `setup_mysql.py` script:
+The application uses a `.env` file for configuration, which is created by the `scripts/setup_mysql.py` script:
 
 ```bash
 # Database Configuration
@@ -415,14 +426,30 @@ For production deployment:
 ### Database Connection Issues
 
 - Ensure MySQL server is running
-- Verify database credentials
-- Check if database exists (run `init_db.py`)
+- Verify database credentials using `scripts/manage_connection.py`
+- Check if database exists (run `scripts/init_db.py` or use the tools menu)
 
 ### WebSocket Connection Issues
 
 - Ensure server is running on the correct port
 - Check firewall settings
 - Verify WebSocket URL format
+- Use `scripts/network_test.py` to diagnose connectivity issues
+
+### Utility Scripts
+
+The project includes several utility scripts in the `scripts/` directory:
+
+- **tools.py**: Main menu for accessing all utility scripts
+- **init_db.py**: Initialize the database schema and sample data
+- **setup_mysql.py**: Configure MySQL connection settings
+- **manage_connection.py**: Interactive tool to manage database connections
+- **network_test.py**: Diagnose network connectivity issues
+- **test_system.py**: Run system tests to verify functionality
+- **client.py**: Test client for WebSocket connections
+- **update_db_connection.py**: Update database connection for network access
+
+Run these scripts directly or use the tools menu (`tools.bat` on Windows)
 
 ### Import Errors
 
