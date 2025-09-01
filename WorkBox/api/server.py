@@ -1,43 +1,38 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException
+"""
+WorkBox API Server
+=================
+
+This module initializes the FastAPI server and integrates all routes.
+"""
+
+from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from typing import List
+import json
 import asyncio
-from datetime import datetime
+from typing import List, Dict
 
-from .database import get_db, create_tables
-from .models import (
-    User as UserModel,
-    Inventory as InventoryModel,
-    Order as OrderModel,
-    OrderItem as OrderItemModel,
-)
-from .schemas import (
-    User,
-    UserCreate,
-    Inventory,
-    InventoryCreate,
-    InventoryUpdate,
-    Order,
-    OrderCreate,
-    InventoryUpdateMessage,
-    OrderPlacedMessage,
+from . import models
+from .database import get_db, engine, check_connection
+from .schemas import UserCreate, UserResponse, InventoryCreate, InventoryResponse
+
+# Create FastAPI app
+app = FastAPI(
+    title="WorkBox API",
+    description="WorkBox Inventory Management System API",
+    version="1.0.0",
 )
 
-# Initialize FastAPI app
-app = FastAPI(title="WorkBox Inventory Management", version="1.0.0")
-
-# Add CORS middleware
+# Configure CORS for frontend access from different origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend domains
+    allow_origins=["*"],  # You may want to restrict this in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# WebSocket connection manager
+# WebSocket connections store
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -49,227 +44,51 @@ class ConnectionManager:
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
 
-    async def broadcast(self, message: dict):
-        """Broadcast message to all connected clients"""
+    async def broadcast(self, message: Dict):
+        """Send a message to all connected clients"""
         for connection in self.active_connections:
             try:
                 await connection.send_json(message)
             except Exception:
-                # Remove dead connections
-                self.active_connections.remove(connection)
+                # If sending fails, assume connection is dead
+                pass
 
 
 # Initialize connection manager
 manager = ConnectionManager()
 
-
-# Create database tables on startup
+# Test database connection on startup
 @app.on_event("startup")
-async def startup_event():
-    create_tables()
+async def startup_db_client():
+    """Run on application startup - verify database connection"""
+    if not check_connection():
+        print("Failed to connect to the database. Please check your configuration.")
+        # In production, you might want to fail startup instead of continuing
+        # import sys
+        # sys.exit(1)
 
 
-# REST API Endpoints
+# API Routes
+@app.get("/")
+async def root():
+    """Root endpoint - API status check"""
+    return {
+        "message": "WorkBox API is running",
+        "status": "online",
+        "version": "1.0.0",
+    }
 
 
-# Users
-@app.post("/users/", response_model=User)
-def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    """Create a new user"""
-    db_user = db.query(UserModel).filter(UserModel.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    db_user = UserModel(username=user.username, email=user.email)
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
-
-
-@app.get("/users/", response_model=List[User])
-def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get all users"""
-    users = db.query(UserModel).offset(skip).limit(limit).all()
-    return users
-
-
-@app.get("/users/{user_id}", response_model=User)
-def read_user(user_id: int, db: Session = Depends(get_db)):
-    """Get user by ID"""
-    db_user = db.query(UserModel).filter(UserModel.id == user_id).first()
-    if db_user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return db_user
-
-
-# Inventory
-@app.post("/inventory/", response_model=Inventory)
-def create_inventory_item(item: InventoryCreate, db: Session = Depends(get_db)):
-    """Create a new inventory item"""
-    db_item = Inventory(**item.dict())
-    db.add(db_item)
-    db.commit()
-    db.refresh(db_item)
-    return db_item
-
-
-@app.get("/inventory/", response_model=List[Inventory])
-def read_inventory(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get all inventory items"""
-    items = db.query(InventoryModel).offset(skip).limit(limit).all()
-    return items
-
-
-@app.get("/inventory/{item_id}", response_model=Inventory)
-def read_inventory_item(item_id: int, db: Session = Depends(get_db)):
-    """Get inventory item by ID"""
-    db_item = db.query(InventoryModel).filter(InventoryModel.id == item_id).first()
-    if db_item is None:
-        raise HTTPException(status_code=404, detail="Inventory item not found")
-    return db_item
-
-
-@app.put("/inventory/{item_id}", response_model=Inventory)
-def update_inventory_item(
-    item_id: int, item_update: InventoryUpdate, db: Session = Depends(get_db)
-):
-    """Update inventory item"""
-    db_item = db.query(InventoryModel).filter(InventoryModel.id == item_id).first()
-    if db_item is None:
-        raise HTTPException(status_code=404, detail="Inventory item not found")
-
-    for field, value in item_update.dict(exclude_unset=True).items():
-        setattr(db_item, field, value)
-
-    db.commit()
-    db.refresh(db_item)
-
-    # Broadcast inventory update
-    update_message = InventoryUpdateMessage(
-        inventory_id=int(db_item.id),
-        name=str(db_item.name),
-        stock_quantity=int(db_item.stock_quantity),
-        price=float(db_item.price),
-    )
-    asyncio.create_task(manager.broadcast(update_message.dict()))
-
-    return db_item
-
-
-# Orders
-@app.post("/orders/", response_model=Order)
-async def create_order(order: OrderCreate, db: Session = Depends(get_db)):
-    """Create a new order and update inventory"""
-    # Verify user exists
-    db_user = db.query(UserModel).filter(UserModel.id == order.user_id).first()
-    if not db_user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    total_amount = 0.0
-    order_items = []
-
-    # Verify inventory and calculate total
-    for item in order.items:
-        db_inventory = (
-            db.query(InventoryModel)
-            .filter(InventoryModel.id == item.inventory_id)
-            .first()
-        )
-        if not db_inventory:
-            raise HTTPException(
-                status_code=404, detail=f"Inventory item {item.inventory_id} not found"
-            )
-
-        if db_inventory.stock_quantity < item.quantity:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insufficient stock for {db_inventory.name}. Available: {db_inventory.stock_quantity}",
-            )
-
-        total_amount += float(db_inventory.price) * item.quantity
-
-        # Create order item
-        order_item = OrderItemModel(
-            inventory_id=item.inventory_id,
-            quantity=item.quantity,
-            unit_price=db_inventory.price,
-        )
-        order_items.append(order_item)
-
-    # Create order
-    db_order = OrderModel(
-        user_id=order.user_id,
-        total_amount=total_amount,
-        status="confirmed",
-        items=order_items,
-    )
-
-    db.add(db_order)
-    db.commit()
-    db.refresh(db_order)
-
-    # Update inventory stock
-    for item in order.items:
-        db_inventory = (
-            db.query(InventoryModel)
-            .filter(InventoryModel.id == item.inventory_id)
-            .first()
-        )
-        if db_inventory:
-            # Update stock quantity using direct SQL update
-            new_stock = int(db_inventory.stock_quantity) - item.quantity
-            db.query(InventoryModel).filter(
-                InventoryModel.id == item.inventory_id
-            ).update({"stock_quantity": new_stock})
-            db.commit()
-
-            # Refresh the object to get updated values
-            db.refresh(db_inventory)
-
-            # Broadcast inventory update
-            update_message = InventoryUpdateMessage(
-                inventory_id=int(db_inventory.id),
-                name=str(db_inventory.name),
-                stock_quantity=int(db_inventory.stock_quantity),
-                price=float(db_inventory.price),
-            )
-            await manager.broadcast(update_message.dict())
-
-    # Broadcast order placed message
-    order_message = OrderPlacedMessage(
-        order_id=int(db_order.id),
-        user_id=int(db_order.user_id),
-        total_amount=float(db_order.total_amount),
-        items=[
-            {
-                "inventory_id": item.inventory_id,
-                "name": item.inventory.name,
-                "quantity": item.quantity,
-                "unit_price": item.unit_price,
-            }
-            for item in db_order.items
-        ],
-    )
-    await manager.broadcast(order_message.dict())
-
-    return db_order
-
-
-@app.get("/orders/", response_model=List[Order])
-def read_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get all orders"""
-    orders = db.query(OrderModel).offset(skip).limit(limit).all()
-    return orders
-
-
-@app.get("/orders/{order_id}", response_model=Order)
-def read_order(order_id: int, db: Session = Depends(get_db)):
-    """Get order by ID"""
-    db_order = db.query(OrderModel).filter(OrderModel.id == order_id).first()
-    if db_order is None:
-        raise HTTPException(status_code=404, detail="Order not found")
-    return db_order
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring"""
+    db_status = "online" if check_connection() else "offline"
+    
+    return {
+        "status": "healthy",
+        "database": db_status,
+        "timestamp": asyncio.datetime.datetime.utcnow().isoformat(),
+    }
 
 
 # WebSocket endpoint
@@ -279,16 +98,127 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # Wait for messages from client (optional)
+            # Wait for messages from the client
             data = await websocket.receive_text()
-            # Echo back or handle client messages if needed
-            await websocket.send_text(f"Message received: {data}")
+            
+            try:
+                # Parse client message
+                message = json.loads(data)
+                
+                # Process message - you would add your own logic here
+                response = {
+                    "event": "echo",
+                    "data": message
+                }
+                
+                # Broadcast to all clients
+                await manager.broadcast(response)
+                
+            except json.JSONDecodeError:
+                # Send error if message isn't valid JSON
+                await websocket.send_json({"error": "Invalid JSON format"})
+    
     except WebSocketDisconnect:
+        # Handle client disconnection
         manager.disconnect(websocket)
+        
+        # Notify remaining clients about disconnection
+        await manager.broadcast({
+            "event": "client_disconnected",
+            "count": len(manager.active_connections)
+        })
 
 
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "timestamp": datetime.utcnow()}
+# Include API route modules
+# These would typically be imported from other files
+# from .routes import users, inventory, orders
+# app.include_router(users.router)
+# app.include_router(inventory.router)
+# app.include_router(orders.router)
+
+# For now, let's add some basic routes directly here
+
+# Users
+@app.post("/users/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    """Create a new user"""
+    db_user = models.User(
+        username=user.username,
+        email=user.email,
+        hashed_password="placeholder_hash",  # In a real app, you'd hash the password
+        is_admin=user.is_admin
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    
+    # Notify connected clients about new user
+    await manager.broadcast({
+        "event": "user_created",
+        "data": {
+            "id": db_user.id,
+            "username": db_user.username,
+            "email": db_user.email
+        }
+    })
+    
+    return db_user
+
+
+@app.get("/users/", response_model=List[UserResponse])
+async def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """Get all users with pagination"""
+    users = db.query(models.User).offset(skip).limit(limit).all()
+    return users
+
+
+@app.get("/users/{user_id}", response_model=UserResponse)
+async def read_user(user_id: int, db: Session = Depends(get_db)):
+    """Get a specific user by ID"""
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return db_user
+
+
+# Inventory
+@app.post("/inventory/", response_model=InventoryResponse, status_code=status.HTTP_201_CREATED)
+async def create_inventory(inventory: InventoryCreate, db: Session = Depends(get_db)):
+    """Create a new inventory item"""
+    db_inventory = models.Inventory(
+        name=inventory.name,
+        description=inventory.description,
+        price=inventory.price,
+        stock_quantity=inventory.stock_quantity
+    )
+    db.add(db_inventory)
+    db.commit()
+    db.refresh(db_inventory)
+    
+    # Notify connected clients about new inventory
+    await manager.broadcast({
+        "event": "inventory_created",
+        "data": {
+            "id": db_inventory.id,
+            "name": db_inventory.name,
+            "stock_quantity": db_inventory.stock_quantity
+        }
+    })
+    
+    return db_inventory
+
+
+@app.get("/inventory/", response_model=List[InventoryResponse])
+async def read_inventory(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """Get all inventory items with pagination"""
+    inventory = db.query(models.Inventory).offset(skip).limit(limit).all()
+    return inventory
+
+
+@app.get("/inventory/{inventory_id}", response_model=InventoryResponse)
+async def read_inventory_item(inventory_id: int, db: Session = Depends(get_db)):
+    """Get a specific inventory item by ID"""
+    db_inventory = db.query(models.Inventory).filter(models.Inventory.id == inventory_id).first()
+    if db_inventory is None:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+    return db_inventory

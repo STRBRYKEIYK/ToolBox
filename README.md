@@ -1,6 +1,6 @@
 # WorkBox - Real-time Inventory Management System
 
-A FastAPI-based WebSocket application for real-time inventory management with MySQL database backend.
+A FastAPI-based WebSocket application for real-time inventory management with MySQL database backend, designed for multiple users across different networks.
 
 ## Features
 
@@ -8,16 +8,52 @@ A FastAPI-based WebSocket application for real-time inventory management with My
 - **WebSocket support** for real-time updates
 - **Automatic inventory updates** when orders are placed
 - **Broadcast notifications** to all connected clients
+- **Multi-user access** from different networks
+- **Connection pooling** for efficient database connections
+- **Database migration system** for schema evolution
 - **MySQL database** with SQLAlchemy ORM
 - **Production-ready** with proper error handling and logging
 
-## Prerequisites
+## System Requirements
 
 - Python 3.8+
-- MySQL Server
+- MySQL Server 5.7+ or 8.0+
+- Network connectivity between application and database servers
 - pip (Python package manager)
 
-## Installation
+## Network Setup for Multi-User Access
+
+### Database Server Configuration
+
+1. **Configure MySQL for remote access:**
+
+   Edit your MySQL configuration file (my.cnf or my.ini):
+
+   ```ini
+   [mysqld]
+   bind-address = 0.0.0.0  # Listen on all interfaces
+   ```
+
+2. **Create users with network privileges:**
+
+   ```sql
+   CREATE USER 'workbox_user'@'%' IDENTIFIED BY 'secure_password';
+   GRANT ALL PRIVILEGES ON workbox_db.* TO 'workbox_user'@'%';
+   FLUSH PRIVILEGES;
+   ```
+
+3. **Configure firewall to allow MySQL connections:**
+   For Linux (using ufw):
+
+   ```bash
+   sudo ufw allow 3306/tcp
+   ```
+
+   For Windows:
+   - Open Windows Firewall with Advanced Security
+   - Create a new inbound rule for port 3306 (TCP)
+
+### Installation
 
 1. **Clone or navigate to the project directory**
 
@@ -27,9 +63,15 @@ A FastAPI-based WebSocket application for real-time inventory management with My
    pip install -r requirements.txt
    ```
 
-3. **Set up MySQL database:**
-   - Create a MySQL database named `workbox_db`
-   - Update database credentials in environment variables (see Configuration section)
+3. **Set up database configuration:**
+
+   ```bash
+   python setup_mysql.py
+   ```
+
+   When prompted, enter your database server details:
+   - For local development: Use `localhost` as the host
+   - For network access: Use the database server's IP address or hostname
 
 4. **Initialize the database:**
 
@@ -39,31 +81,69 @@ A FastAPI-based WebSocket application for real-time inventory management with My
 
 ## Configuration
 
-Create a `.env` file in the project root or set environment variables:
+The application uses a `.env` file for configuration, which is created by the `setup_mysql.py` script:
 
 ```bash
 # Database Configuration
-DB_HOST=localhost
-DB_USER=root
+DB_HOST=your_db_server_hostname_or_ip
+DB_PORT=3306
+DB_USER=your_username
 DB_PASSWORD=your_password
 DB_NAME=workbox_db
 
-# Optional: Database URL (alternative to individual DB settings)
-DATABASE_URL=mysql+pymysql://root:password@localhost/workbox_db
+# Database connection URL (includes connection pooling parameters)
+DATABASE_URL=mysql+pymysql://your_username:your_password@your_db_server:3306/workbox_db?charset=utf8mb4
+
+# API Server Configuration
+API_HOST=0.0.0.0  # Listen on all network interfaces
+API_PORT=8000
+API_WORKERS=4     # Number of worker processes
+DEBUG=False       # Set to True for development
+
+# Security Settings
+SECRET_KEY=changethissecretkey  # Change this to a secure random string
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
-## Database Schema
+## Database Schema and Migration System
 
-The application uses three main tables:
+The application uses the SQLAlchemy ORM with a robust schema design and migration support:
 
-### Users Table
+### Database Migration
+
+To manage database schema changes:
+
+```bash
+# Set up migration system (first time only)
+python migrations.py setup
+
+# Create a new migration
+python migrations.py create "description_of_changes"
+
+# Apply all pending migrations
+python migrations.py apply
+
+# Roll back the last migration
+python migrations.py rollback
+
+# View migration history
+python migrations.py history
+```
+
+### Core Database Tables
+
+#### Users Table
 
 - `id`: Primary key
 - `username`: Unique username
 - `email`: Unique email address
+- `hashed_password`: Securely stored password hash
+- `is_admin`: Boolean flag for admin permissions
+- `is_active`: Boolean flag for account status
 - `created_at`: Timestamp
+- `last_login`: Last login timestamp
 
-### Inventory Table
+#### Inventory Table
 
 - `id`: Primary key
 - `name`: Product name
@@ -73,30 +153,106 @@ The application uses three main tables:
 - `created_at`: Creation timestamp
 - `updated_at`: Last update timestamp
 
-### Orders Table
+#### Orders Table
 
 - `id`: Primary key
 - `user_id`: Foreign key to Users
 - `total_amount`: Order total
-- `status`: Order status (pending, confirmed, shipped, delivered)
-- `created_at`: Creation timestamp
-- `updated_at`: Last update timestamp
+- `status`: Order status (pending, processing, shipped, delivered, cancelled)
+- `order_date`: Creation timestamp
+- `shipping_address`: Shipping address
 
-### Order Items Table
+#### Order Items Table
 
 - `id`: Primary key
 - `order_id`: Foreign key to Orders
 - `inventory_id`: Foreign key to Inventory
 - `quantity`: Ordered quantity
-- `unit_price`: Price at time of order
+- `price`: Price at time of order
+
+#### User Activity Table
+
+- `id`: Primary key
+- `user_id`: Foreign key to Users
+- `activity_type`: Type of activity (login, logout, create, update, delete)
+- `description`: Activity description
+- `timestamp`: Activity timestamp
+- `ip_address`: User's IP address
+
+#### Settings Table
+
+- `id`: Primary key
+- `key`: Setting key
+- `value`: Setting value
+- `description`: Setting description
+- `updated_at`: Last update timestamp
 
 ## Running the Server
 
-Start the FastAPI server:
+Start the FastAPI server with multi-user support:
 
 ```bash
 python main.py
 ```
+
+The server will start with the following endpoints:
+
+- API Endpoint: `http://server_ip:8000`
+- API Documentation: `http://server_ip:8000/docs`
+- WebSocket Endpoint: `ws://server_ip:8000/ws`
+
+## Connection Pooling Details
+
+The application is configured with optimized database connection pooling:
+
+- **Pool size**: 20 connections (configurable)
+- **Maximum overflow**: 10 additional connections
+- **Pool timeout**: 30 seconds
+- **Connection recycling**: Every 3600 seconds (1 hour)
+- **Connection validation**: Pre-ping enabled to avoid stale connections
+- **Character set**: UTF-8MB4 (full Unicode support)
+
+These settings ensure:
+
+1. Efficient handling of multiple simultaneous users
+2. Automatic recovery from connection failures
+3. Optimal database server resource utilization
+4. Protection against connection leaks
+
+## Troubleshooting Network Connectivity
+
+If clients cannot connect to the database:
+
+1. **Verify MySQL network configuration:**
+
+   ```bash
+   # On the database server
+   sudo netstat -tulpn | grep mysql
+   ```
+
+   Should show MySQL listening on 0.0.0.0:3306 or similar
+
+2. **Check firewall settings:**
+
+   ```bash
+   # On the database server (Linux)
+   sudo iptables -L | grep 3306
+   ```
+
+3. **Test connectivity from client:**
+
+   ```bash
+   # From any client machine
+   telnet database_server_ip 3306
+   ```
+
+4. **Verify user permissions in MySQL:**
+
+   ```sql
+   SELECT user, host FROM mysql.user WHERE user = 'your_db_user';
+   ```
+
+   Should show an entry with host '%' for network access
 
 The server will start on `http://localhost:8000` with the following endpoints:
 

@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """
-MySQL Setup Helper for WorkBox    print(f"\n🔍 Testing connection to MySQL...")
-    print(f"   Host: {host}:{port}")
-    print(f"   User: {user}")
-    print(f"   Database: {db_name}")
-
-    if test_mysql_connection(host, port, user, password):
-        create_env_file(host, port, user, password, db_name)==========================
+MySQL Setup Helper for WorkBox
+============================
 
 This script helps you set up your MySQL credentials for the WorkBox application.
 Run this script to test your MySQL connection and create the .env file.
+
+Usage:
+    # On Windows with Python in PATH:
+    python setup_mysql.py
+    
+    # On Windows if Python is not in PATH:
+    "C:/Program Files/Python313/python.exe" setup_mysql.py
+    
+    # On Linux/Mac:
+    ./setup_mysql.py
 """
 
 import pymysql
@@ -43,8 +48,18 @@ DB_USER={user}
 DB_PASSWORD={password}
 DB_NAME={db_name}
 
-# Alternative: Full database URL
-DATABASE_URL=mysql+pymysql://{user}:{password}@{host}:{port}/{db_name}
+# Database connection URL (includes connection pooling parameters)
+DATABASE_URL=mysql+pymysql://{user}:{password}@{host}:{port}/{db_name}?charset=utf8mb4
+
+# API Server Configuration
+API_HOST=0.0.0.0  # Listen on all network interfaces
+API_PORT=8000
+API_WORKERS=4     # Number of worker processes (set to CPU cores)
+DEBUG=False       # Set to True for development
+
+# Security Settings
+SECRET_KEY=changethissecretkey  # Change this to a secure random string
+ACCESS_TOKEN_EXPIRE_MINUTES=30
 """
 
     with open(".env", "w") as f:
