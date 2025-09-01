@@ -76,6 +76,7 @@ New-NetFirewallRule -DisplayName "WorkBox API" -Direction Inbound -LocalPort 800
 ```
 
 Or use the GUI method:
+
 1. Open "Windows Defender Firewall with Advanced Security"
 2. Select "Inbound Rules" > "New Rule..."
 3. Choose "Port" > "TCP" > Specific port: "8000"
@@ -96,7 +97,8 @@ For secure connections, use HTTPS:
 ```
 
 Then connect using:
-```
+
+```URL
 https://YOUR_SERVER_IP:8000
 ```
 
@@ -111,6 +113,7 @@ WorkBox includes a network test tool to diagnose connection issues:
 ```
 
 This displays:
+
 - Your server's IP address
 - Server running status
 - Firewall status
@@ -121,11 +124,13 @@ This displays:
 ### "Connection refused" Error
 
 **Possible causes:**
+
 - Server not running
 - Wrong IP address or port
 - Firewall blocking connection
 
 **Solutions:**
+
 1. Verify server is running with `.\setup.bat run`
 2. Confirm correct IP address with `.\setup.bat network`
 3. Temporarily disable firewall to test
@@ -133,11 +138,13 @@ This displays:
 ### Client Can't Connect Despite Server Running
 
 **Possible causes:**
+
 - Network isolation
 - IP address changed
 - Wrong network interface
 
 **Solutions:**
+
 1. Check if both devices are on the same network
 2. Run `.\setup.bat network` to verify current IP
 3. Try connecting to localhost from the server machine

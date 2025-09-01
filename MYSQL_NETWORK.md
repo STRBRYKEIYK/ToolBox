@@ -7,10 +7,11 @@ If you're having trouble connecting to MySQL from other devices on the network, 
 MySQL by default only listens for connections from the local machine (127.0.0.1). To allow connections from other devices, you need to:
 
 1. **Run the MySQL Network Configuration Helper**:
-   ```
+
+   ``` INFO
    .\setup.bat mysql_network
    ```
-   
+
    This will:
    - Locate your MySQL configuration file (my.ini)
    - Change the bind-address setting to 0.0.0.0
@@ -18,10 +19,11 @@ MySQL by default only listens for connections from the local machine (127.0.0.1)
    - Check user permissions
 
 2. **Update the Database Connection Settings**:
-   ```
+
+   ``` INFO
    .\setup.bat db_connection
    ```
-   
+
    This will:
    - Update your .env file with the proper IP address
    - Test the connection to verify it works
@@ -53,21 +55,25 @@ If the automatic tools don't work, you can manually configure MySQL:
 Your database user needs permission to connect from remote hosts:
 
 1. **Log into MySQL**:
+
    ```sql
    mysql -u root -p
    ```
 
 2. **Check user permissions**:
+
    ```sql
    SELECT user, host FROM mysql.user;
    ```
 
 3. **Create a user with network access**:
+
    ```sql
    CREATE USER 'workbox_user'@'%' IDENTIFIED BY 'password';
    GRANT ALL PRIVILEGES ON workbox_db.* TO 'workbox_user'@'%';
    FLUSH PRIVILEGES;
    ```
+
    (The '%' means "from any host")
 
 ## Common MySQL Connection Issues
@@ -83,7 +89,7 @@ Your database user needs permission to connect from remote hosts:
 
 From another device, you can test the connection:
 
-```
+```CMD
 mysql -h YOUR_SERVER_IP -u workbox_user -p workbox_db
 ```
 
