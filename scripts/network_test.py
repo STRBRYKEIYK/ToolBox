@@ -17,11 +17,12 @@ try:
 except ImportError:
     # Define color constants for when colorama is not available
     class DummyColors:
-        def __getattr__(self, name):
+        def __getattr__(self, name: str) -> str:
             return ""
     
-    Fore = DummyColors()
-    Style = DummyColors()
+    # Create dummy objects with the same type annotation as colorama's objects
+    Fore = DummyColors()  # type: ignore
+    Style = DummyColors()  # type: ignore
     HAS_COLORS = False
 
 def print_header(text):

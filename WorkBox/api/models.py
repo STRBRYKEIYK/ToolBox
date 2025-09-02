@@ -5,11 +5,9 @@ WorkBox Database Models
 This module defines the SQLAlchemy ORM models for all database tables.
 """
 
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean, Text, Table
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Text
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 from datetime import datetime
-import enum
 
 from .database import Base
 
@@ -18,14 +16,16 @@ class User(Base):
     """User model represents employees and administrators in the system."""
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String(100), nullable=False)
     username = Column(String(50), unique=True, index=True, nullable=False)
-    email = Column(String(100), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False, default="password_hash")
-    is_admin = Column(Boolean, default=False)
-    is_active = Column(Boolean, default=True)
+    access_level = Column(String(20), nullable=False, default="user")  # admin, user, etc.
+    password_salt = Column(String(100), nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    twofa_salt = Column(String(100), nullable=True)
+    twofa_hash = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    last_login = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     orders = relationship("Order", back_populates="user")
@@ -33,14 +33,25 @@ class User(Base):
 
 
 class Inventory(Base):
-    """Inventory model represents products in the warehouse."""
+    """Inventory model represents materials and products for metal fabrication."""
     __tablename__ = "inventory"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), index=True, nullable=False)
-    description = Column(Text, nullable=True)
-    price = Column(Float, nullable=False)
-    stock_quantity = Column(Integer, default=0)
+    item_id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    item_name = Column(String(100), index=True, nullable=False)
+    brand = Column(String(100), nullable=True)
+    category = Column(String(50), nullable=True)  # consumables, equipment, etc.
+    location = Column(String(100), nullable=True)  # storage area
+    unit = Column(String(20), nullable=True)  # pcs, kg, lengths, etc.
+    stock_in = Column(Integer, default=0)
+    stock_out = Column(Integer, default=0)
+    current_stock = Column(Integer, default=0)  # Calculated as stock_in - stock_out
+    min_stock = Column(Integer, default=0)
+    deficit = Column(Integer, default=0)  # Calculated as current_stock - min_stock
+    status = Column(String(20), default="In Stock")  # Out of Stock, Low in Stock, In Stock
+    price_per_unit = Column(Float, nullable=True)
+    total_cost = Column(Float, default=0.0)  # Calculated as current_stock × price_per_unit
+    last_po_date = Column(DateTime, nullable=True)  # Date of last purchase order
+    supplier = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -49,15 +60,16 @@ class Inventory(Base):
 
 
 class Order(Base):
-    """Order model represents customer orders."""
+    """Order model represents material orders and requisitions."""
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
     order_date = Column(DateTime, default=datetime.utcnow)
     status = Column(String(20), default="pending")  # pending, processing, shipped, delivered, cancelled
     total_amount = Column(Float, nullable=False)
-    shipping_address = Column(String(255), nullable=True)
+    supplier = Column(String(100), nullable=True)
+    notes = Column(Text, nullable=True)
     
     # Relationships
     user = relationship("User", back_populates="orders")
@@ -70,7 +82,7 @@ class OrderItem(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
-    inventory_id = Column(Integer, ForeignKey("inventory.id"), nullable=False)
+    inventory_id = Column(Integer, ForeignKey("inventory.item_id"), nullable=False)
     quantity = Column(Integer, nullable=False)
     price = Column(Float, nullable=False)  # Price at time of order
     
@@ -84,11 +96,12 @@ class UserActivity(Base):
     __tablename__ = "user_activities"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
     activity_type = Column(String(50), nullable=False)  # login, logout, create, update, delete
     description = Column(Text, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
     ip_address = Column(String(50), nullable=True)
+    affected_item = Column(Integer, nullable=True)  # ID of affected inventory item if relevant
     
     # Relationships
     user = relationship("User", back_populates="activities")

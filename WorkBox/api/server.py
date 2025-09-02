@@ -9,11 +9,10 @@ from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPExcept
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import json
-import asyncio
 from typing import List, Dict
 
 from . import models
-from .database import get_db, engine, check_connection
+from .database import get_db, check_connection
 from .schemas import UserCreate, UserResponse, InventoryCreate, InventoryResponse
 
 # Create FastAPI app
@@ -34,17 +33,17 @@ app.add_middleware(
 
 # WebSocket connections store
 class ConnectionManager:
-    def __init__(self):
+    def __init__(self) -> None:
         self.active_connections: List[WebSocket] = []
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
         self.active_connections.append(websocket)
 
-    def disconnect(self, websocket: WebSocket):
+    def disconnect(self, websocket: WebSocket) -> None:
         self.active_connections.remove(websocket)
 
-    async def broadcast(self, message: Dict):
+    async def broadcast(self, message: Dict) -> None:
         """Send a message to all connected clients"""
         for connection in self.active_connections:
             try:
@@ -59,7 +58,7 @@ manager = ConnectionManager()
 
 # Test database connection on startup
 @app.on_event("startup")
-async def startup_db_client():
+async def startup_db_client() -> None:
     """Run on application startup - verify database connection"""
     if not check_connection():
         print("Failed to connect to the database. Please check your configuration.")
@@ -70,7 +69,7 @@ async def startup_db_client():
 
 # API Routes
 @app.get("/")
-async def root():
+async def root() -> Dict:
     """Root endpoint - API status check"""
     return {
         "message": "WorkBox API is running",
@@ -80,20 +79,22 @@ async def root():
 
 
 @app.get("/health")
-async def health_check():
+async def health_check() -> Dict:
     """Health check endpoint for monitoring"""
     db_status = "online" if check_connection() else "offline"
+    
+    from datetime import datetime
     
     return {
         "status": "healthy",
         "database": db_status,
-        "timestamp": asyncio.datetime.datetime.utcnow().isoformat(),
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 
 # WebSocket endpoint
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket) -> None:
     """WebSocket endpoint for real-time updates"""
     await manager.connect(websocket)
     try:
@@ -140,13 +141,21 @@ async def websocket_endpoint(websocket: WebSocket):
 
 # Users
 @app.post("/users/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def create_user(user: UserCreate, db: Session = Depends(get_db)):
+async def create_user(user: UserCreate, db: Session = Depends(get_db)) -> models.User:
     """Create a new user"""
+    # Simple salt/hash generation (in production, use a proper password hashing library)
+    import hashlib
+    import secrets
+    
+    salt = secrets.token_hex(16)
+    password_hash = hashlib.sha256((salt + user.password).encode()).hexdigest()
+    
     db_user = models.User(
         username=user.username,
-        email=user.email,
-        hashed_password="placeholder_hash",  # In a real app, you'd hash the password
-        is_admin=user.is_admin
+        full_name=user.full_name,
+        access_level=user.access_level,
+        password_salt=salt,
+        password_hash=password_hash
     )
     db.add(db_user)
     db.commit()
@@ -156,9 +165,9 @@ async def create_user(user: UserCreate, db: Session = Depends(get_db)):
     await manager.broadcast({
         "event": "user_created",
         "data": {
-            "id": db_user.id,
+            "id": db_user.user_id,
             "username": db_user.username,
-            "email": db_user.email
+            "full_name": db_user.full_name
         }
     })
     
@@ -166,14 +175,14 @@ async def create_user(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/users/", response_model=List[UserResponse])
-async def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+async def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> List[models.User]:
     """Get all users with pagination"""
     users = db.query(models.User).offset(skip).limit(limit).all()
     return users
 
 
 @app.get("/users/{user_id}", response_model=UserResponse)
-async def read_user(user_id: int, db: Session = Depends(get_db)):
+async def read_user(user_id: int, db: Session = Depends(get_db)) -> models.User:
     """Get a specific user by ID"""
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if db_user is None:
@@ -183,13 +192,20 @@ async def read_user(user_id: int, db: Session = Depends(get_db)):
 
 # Inventory
 @app.post("/inventory/", response_model=InventoryResponse, status_code=status.HTTP_201_CREATED)
-async def create_inventory(inventory: InventoryCreate, db: Session = Depends(get_db)):
+async def create_inventory(inventory: InventoryCreate, db: Session = Depends(get_db)) -> models.Inventory:
     """Create a new inventory item"""
     db_inventory = models.Inventory(
-        name=inventory.name,
-        description=inventory.description,
-        price=inventory.price,
-        stock_quantity=inventory.stock_quantity
+        item_name=inventory.item_name,
+        brand=inventory.brand,
+        category=inventory.category,
+        location=inventory.location,
+        unit=inventory.unit,
+        min_stock=inventory.min_stock,
+        price_per_unit=inventory.price_per_unit,
+        supplier=inventory.supplier,
+        stock_in=inventory.stock_in,
+        stock_out=0,
+        current_stock=inventory.stock_in
     )
     db.add(db_inventory)
     db.commit()
@@ -199,9 +215,10 @@ async def create_inventory(inventory: InventoryCreate, db: Session = Depends(get
     await manager.broadcast({
         "event": "inventory_created",
         "data": {
-            "id": db_inventory.id,
-            "name": db_inventory.name,
-            "stock_quantity": db_inventory.stock_quantity
+            "id": db_inventory.item_id,
+            "name": db_inventory.item_name,
+            "current_stock": db_inventory.current_stock,
+            "status": db_inventory.status
         }
     })
     
@@ -209,14 +226,14 @@ async def create_inventory(inventory: InventoryCreate, db: Session = Depends(get
 
 
 @app.get("/inventory/", response_model=List[InventoryResponse])
-async def read_inventory(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+async def read_inventory(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)) -> List[models.Inventory]:
     """Get all inventory items with pagination"""
     inventory = db.query(models.Inventory).offset(skip).limit(limit).all()
     return inventory
 
 
 @app.get("/inventory/{inventory_id}", response_model=InventoryResponse)
-async def read_inventory_item(inventory_id: int, db: Session = Depends(get_db)):
+async def read_inventory_item(inventory_id: int, db: Session = Depends(get_db)) -> models.Inventory:
     """Get a specific inventory item by ID"""
     db_inventory = db.query(models.Inventory).filter(models.Inventory.id == inventory_id).first()
     if db_inventory is None:

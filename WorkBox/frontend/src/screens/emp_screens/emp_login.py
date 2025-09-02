@@ -9,14 +9,32 @@ import sys
 from pathlib import Path
 from tkinter import Tk, Canvas, Entry, Button, PhotoImage, messagebox, StringVar
 
-# Add parent directory to path to allow importing from src
+# Add parent directories to path to allow importing local modules
 current_dir = Path(__file__).parent
+parent_dirs = []
+
+# Add frontend/src to path
 src_dir = current_dir.parent.parent
-sys.path.insert(0, str(src_dir))
+parent_dirs.append(str(src_dir))
+
+# Add WorkBox root directory to path
+workbox_root = current_dir.parent.parent.parent.parent
+parent_dirs.append(str(workbox_root))
+
+# Add project root to path
+project_root = workbox_root.parent
+parent_dirs.append(str(project_root))
+
+for path in parent_dirs:
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+# For debugging, you can uncomment this to see the sys.path
+# print("Python path:", sys.path)
 
 # Import local modules after adding to path
-from backend.auth import AuthenticationManager  # noqa: E402
-from utils.path_utils import get_relative_asset_path  # noqa: E402
+from WorkBox.frontend.src.backend.auth import AuthenticationManager  # noqa: E402
+from WorkBox.frontend.src.utils.path_utils import get_relative_asset_path  # noqa: E402
 
 
 class LoginScreen:

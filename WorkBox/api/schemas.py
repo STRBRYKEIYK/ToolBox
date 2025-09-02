@@ -5,30 +5,30 @@ WorkBox API Schemas
 This module defines the Pydantic models (schemas) for request/response validation.
 """
 
-from pydantic import BaseModel, EmailStr, Field, validator
-from typing import Optional, List, Dict
+from pydantic import BaseModel, Field
+from typing import Optional, List
 from datetime import datetime
 
 
 # USER SCHEMAS
 class UserBase(BaseModel):
     """Base schema for User data"""
+    full_name: str = Field(..., min_length=3, max_length=100)
     username: str = Field(..., min_length=3, max_length=50)
-    email: str  # In production, use EmailStr
-    is_admin: bool = False
-    is_active: bool = True
+    access_level: str = "user"
 
 
 class UserCreate(UserBase):
     """Schema for creating a new User"""
     password: str = Field(..., min_length=6)
+    twofa_enabled: bool = False
 
 
 class UserResponse(UserBase):
     """Schema for User responses"""
-    id: int
+    user_id: int
     created_at: datetime
-    last_login: Optional[datetime] = None
+    updated_at: datetime
 
     class Config:
         orm_mode = True
@@ -37,25 +37,53 @@ class UserResponse(UserBase):
 # INVENTORY SCHEMAS
 class InventoryBase(BaseModel):
     """Base schema for Inventory data"""
-    name: str = Field(..., min_length=1, max_length=100)
-    description: Optional[str] = None
-    price: float = Field(..., gt=0)
-    stock_quantity: int = Field(..., ge=0)
+    item_name: str = Field(..., min_length=1, max_length=100)
+    brand: Optional[str] = None
+    category: Optional[str] = None
+    location: Optional[str] = None
+    unit: Optional[str] = None
+    min_stock: int = Field(default=0, ge=0)
+    price_per_unit: Optional[float] = Field(None, gt=0)
+    supplier: Optional[str] = None
 
 
 class InventoryCreate(InventoryBase):
     """Schema for creating a new Inventory item"""
-    pass
+    stock_in: int = Field(default=0, ge=0)
+    
+
+class InventoryUpdate(BaseModel):
+    """Schema for updating an Inventory item"""
+    item_name: Optional[str] = None
+    brand: Optional[str] = None
+    category: Optional[str] = None
+    location: Optional[str] = None
+    unit: Optional[str] = None
+    stock_in: Optional[int] = None
+    stock_out: Optional[int] = None
+    min_stock: Optional[int] = None
+    price_per_unit: Optional[float] = None
+    supplier: Optional[str] = None
 
 
 class InventoryResponse(InventoryBase):
     """Schema for Inventory responses"""
-    id: int
+    item_id: int
+    stock_in: int
+    stock_out: int
+    current_stock: int
+    deficit: int
+    status: str
+    total_cost: float
+    last_po_date: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
     class Config:
         orm_mode = True
+
+
+# Original InventoryResponse replaced with new one above
 
 
 # ORDER SCHEMAS
@@ -75,7 +103,6 @@ class OrderItemResponse(OrderItemBase):
     """Schema for Order Item responses"""
     id: int
     order_id: int
-    inventory: InventoryResponse
 
     class Config:
         orm_mode = True

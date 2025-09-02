@@ -14,12 +14,9 @@ Usage:
     ./setup_mysql.py
 """
 
-import os
 import pymysql
-import platform
-import socket
 from getpass import getpass
-from dotenv import load_dotenv, find_dotenv, set_key
+from dotenv import find_dotenv, set_key
 
 # ANSI color codes for terminal output
 class Colors:
