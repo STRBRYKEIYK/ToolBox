@@ -4,6 +4,9 @@ from pathlib import Path
 # Explicit imports to satisfy Flake8
 from tkinter import Tk, Canvas, Entry, Text, Button, PhotoImage
 
+# Import the Item_container class
+from item_container import Item_container
+
 
 OUTPUT_PATH = Path(__file__).parent
 ASSETS_PATH = OUTPUT_PATH / Path(r"assets/frame0")
@@ -16,6 +19,7 @@ def relative_to_assets(path: str) -> Path:
 window = Tk()
 
 window.geometry("1920x1080")
+window.attributes('-fullscreen', True)  # Set to fullscreen mode
 window.configure(bg = "#426076")
 
 
@@ -37,6 +41,32 @@ image_1 = canvas.create_image(
     603.0,
     image=image_image_1
 )
+
+# Create an instance of the Item_container class
+# Using the dimensions and position of image_1
+item_container = Item_container(
+    parent_window=window,
+    center_x=1129.0,    # Image 1's center x position
+    center_y=603.0,     # Image 1's center y position
+    image_width=1509,   # Image 1's width (1509px)
+    image_height=868    # Image 1's height (868px)
+)
+
+# Function to handle "View" button clicks
+def on_view_item(item_name):
+    print(f"Viewing details for: {item_name}")
+    # Here you would typically open a detail view or perform other actions
+
+# Add sample items to demonstrate the scrolling functionality
+for i in range(8):
+    item_container.add_item_card(
+        item_name="Lorem ipsum dolor sit amet, consectetur adipiscing elit",
+        item_desc="Praesent sit amet ornare metus. Praesent est odio, varius eget turpis et, finibus interdum est",
+        item_category="Basic: Interdum et malesuada fames",
+        item_type="Interdum et malesuada fames",
+        balance=f"{i}0",
+        on_view_click=on_view_item
+    )
 
 button_image_1 = PhotoImage(
     file=relative_to_assets("button_1.png"))
@@ -226,6 +256,8 @@ button_7 = Button(
     image=button_image_7,
     borderwidth=0,
     highlightthickness=0,
+    bg="#4D4C4D",
+    activebackground="#4D4C4D",
     command=lambda: print("button_7 clicked"),
     relief="flat"
 )
@@ -242,6 +274,8 @@ button_8 = Button(
     image=button_image_8,
     borderwidth=0,
     highlightthickness=0,
+    bg="#4D4C4D",
+    activebackground="#4D4C4D",
     command=lambda: print("button_8 clicked"),
     relief="flat"
 )
@@ -258,6 +292,8 @@ button_9 = Button(
     image=button_image_9,
     borderwidth=0,
     highlightthickness=0,
+    bg="#4D4C4D",
+    activebackground="#4D4C4D",
     command=lambda: print("button_9 clicked"),
     relief="flat"
 )
@@ -277,15 +313,16 @@ entry_bg_2 = canvas.create_image(
 )
 entry_2 = Entry(
     bd=0,
-    bg="#FFFFFF",
+    bg="#D9D9D9",
     fg="#000716",
+    font=("Inter Medium", 28),
     highlightthickness=0
 )
 entry_2.place(
-    x=364.0,
-    y=15.0,
-    width=1112.0,
-    height=48.0
+    x=370.0,
+    y=24.0,
+    width=1000.0,
+    height=40.0
 )
 
 image_image_8 = PhotoImage(
@@ -295,5 +332,13 @@ image_8 = canvas.create_image(
     40.0,
     image=image_image_8
 )
+# Add a function to toggle fullscreen with Escape key
+def toggle_fullscreen(event=None):
+    window.attributes("-fullscreen", not window.attributes("-fullscreen"))
+    return "break"
+
+# Bind Escape key to exit fullscreen
+window.bind("<Escape>", toggle_fullscreen)
+
 window.resizable(False, False)
 window.mainloop()
