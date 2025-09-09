@@ -1,11 +1,14 @@
 from pathlib import Path
+import threading
 
 # from tkinter import *
 # Explicit imports to satisfy Flake8
-from tkinter import Tk, Canvas, Entry, Text, Button, PhotoImage
+from tkinter import Tk, Canvas, Entry, Text, Button, PhotoImage, messagebox
 
 # Import the Item_container class
 from item_container import Item_container
+# Import the API utilities
+from api_utils import fetch_items_data
 
 
 OUTPUT_PATH = Path(__file__).parent
@@ -55,18 +58,103 @@ item_container = Item_container(
 # Function to handle "View" button clicks
 def on_view_item(item_name):
     print(f"Viewing details for: {item_name}")
+    messagebox.showinfo("Item Details", f"Viewing details for: {item_name}")
     # Here you would typically open a detail view or perform other actions
 
-# Add sample items to demonstrate the scrolling functionality
-for i in range(8):
-    item_container.add_item_card(
-        item_name="Lorem ipsum dolor sit amet, consectetur adipiscing elit",
-        item_desc="Praesent sit amet ornare metus. Praesent est odio, varius eget turpis et, finibus interdum est",
-        item_category="Basic: Interdum et malesuada fames",
-        item_type="Interdum et malesuada fames",
-        balance=f"{i}0",
-        on_view_click=on_view_item
-    )
+# Status text for loading
+loading_text = canvas.create_text(
+    1129.0, 
+    603.0,
+    text="Loading items...",
+    fill="white",
+    font=("Inter Bold", 20)
+)
+
+# Function to fetch data and populate the container
+def load_items_data():
+    # Fetch data from the API - now returns a tuple with (items_data, full_response)
+    items_data, full_response = fetch_items_data()
+    
+    # Remove loading text once data is fetched
+    canvas.delete(loading_text)
+    
+    # Check if we got any data
+    if not items_data:
+        error_text = canvas.create_text(
+            1129.0, 
+            603.0,
+            text="Failed to load items. Please try again later.",
+            fill="white",
+            font=("Inter Bold", 20)
+        )
+        return
+    
+    # Update the items count
+    items_count_text = canvas.find_withtag("items_count")
+    if items_count_text:
+        canvas.itemconfig(items_count_text[0], text=f"{len(items_data)} Items")
+        
+    # Update the "All Items" text with the total count from statistics if available
+    all_items_text = canvas.find_withtag("all_items_text")
+    if all_items_text:
+        total_items = len(items_data)
+        # Check if we have statistics in the full response
+        if isinstance(full_response, dict):
+            # Check if statistics is directly in the response
+            if 'statistics' in full_response:
+                total_items = full_response['statistics'].get('total_items', len(items_data))
+            # Check if it's nested under pagination
+            elif 'pagination' in full_response and 'total' in full_response['pagination']:
+                total_items = full_response['pagination']['total']
+                
+        canvas.itemconfig(all_items_text[0], text=f"All Items ({total_items})")
+    
+    # Populate the container with the fetched items
+    for item in items_data:
+        # Handle case where item might be a string or other format
+        if isinstance(item, dict):
+            item_name = item.get("item_name", "Unnamed Item")
+            item_desc = f"Brand: {item.get('brand', 'Unknown')}"
+            if item.get("supplier"):
+                item_desc += f" | Supplier: {item.get('supplier')}"
+            
+            item_category = f"Location: {item.get('location', 'Unknown')}"
+            item_type = item.get("item_type", "Unknown Type")
+            balance = str(item.get("balance", "0"))
+            
+            # Add price info if available
+            price = item.get("price_per_unit", 0)
+            if price:
+                item_desc += f" | Price: ${price}"
+                
+            # Add status info
+            status = item.get("item_status", "")
+            if status:
+                item_desc += f" | Status: {status}"
+        elif isinstance(item, str):
+            item_name = item
+            item_desc = "No description available"
+            item_category = "Uncategorized"
+            item_type = "Unknown Type"
+            balance = "0"
+        else:
+            item_name = str(item)
+            item_desc = "No description available"
+            item_category = "Uncategorized"
+            item_type = "Unknown Type"
+            balance = "0"
+            
+        item_container.add_item_card(
+            item_name=item_name,
+            item_desc=item_desc,
+            item_category=item_category,
+            item_type=item_type,
+            balance=balance,
+            on_view_click=on_view_item
+        )
+
+# Start loading data in a separate thread to keep UI responsive
+threading.Thread(target=load_items_data, daemon=True).start()
 
 button_image_1 = PhotoImage(
     file=relative_to_assets("button_1.png"))
@@ -130,7 +218,8 @@ canvas.create_text(
     anchor="nw",
     text="0 Items",
     fill="#000000",
-    font=("Inter SemiBold", 16 * -1)
+    font=("Inter SemiBold", 16 * -1),
+    tags="items_count"
 )
 
 canvas.create_text(
@@ -139,7 +228,8 @@ canvas.create_text(
     anchor="nw",
     text="All Items",
     fill="#FFFFFF",
-    font=("Inter Black", 32 * -1)
+    font=("Inter Black", 32 * -1),
+    tags="all_items_text"
 )
 
 image_image_3 = PhotoImage(
