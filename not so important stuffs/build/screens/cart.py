@@ -99,6 +99,8 @@ button_2 = Button(
     image=button_image_2,
     borderwidth=0,
     highlightthickness=0,
+    bg="#4D4C4D",
+    activebackground="#4D4C4D",
     command=lambda: print("button_2 clicked"),
     relief="flat"
 )
@@ -115,6 +117,8 @@ button_3 = Button(
     image=button_image_3,
     borderwidth=0,
     highlightthickness=0,
+    bg="#4D4C4D",
+    activebackground="#4D4C4D",
     command=lambda: print("button_3 clicked"),
     relief="flat"
 )
@@ -131,6 +135,8 @@ button_4 = Button(
     image=button_image_4,
     borderwidth=0,
     highlightthickness=0,
+    bg="#4D4C4D",
+    activebackground="#4D4C4D",
     command=lambda: print("button_4 clicked"),
     relief="flat"
 )
@@ -150,15 +156,16 @@ entry_bg_1 = canvas.create_image(
 )
 entry_1 = Entry(
     bd=0,
-    bg="#FFFFFF",
+    bg="#D9D9D9",
     fg="#000716",
+    font=("Inter Medium", 28),
     highlightthickness=0
 )
 entry_1.place(
-    x=364.0,
-    y=15.0,
-    width=1112.0,
-    height=48.0
+    x=370.0,
+    y=24.0,
+    width=1000.0,
+    height=40.0
 )
 
 image_image_4 = PhotoImage(
