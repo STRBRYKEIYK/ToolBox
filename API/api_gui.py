@@ -324,24 +324,45 @@ class APIConnectionGUI:
     
     def save_and_continue(self):
         """Save the validated URL and continue to main application"""
-        url = self.current_url.get().strip()
+        base_url = self.current_base_url.get().strip()
+        route = self.current_route.get().strip()
         
-        if url and self.api_connection.last_response:
-            # Here you can save the URL to a config file or pass it to the next screen
+        if base_url and route and self.api_connection.last_response:
+            full_url = f"{base_url.rstrip('/')}{route if route.startswith('/') else '/' + route}"
+            
+            # Here you can save the URL configuration
             messagebox.showinfo("Success", 
-                              f"API connection saved!\n\nURL: {url}\n\n"
-                              "You can now proceed to use the API in your application.")
+                              f"API connection saved!\n\n"
+                              f"Base URL: {base_url}\n"
+                              f"Route: {route}\n"
+                              f"Full URL: {full_url}\n\n"
+                              "The base URL can be updated daily while keeping the same route.")
             
             # You can add code here to:
-            # 1. Save URL to a configuration file
-            # 2. Open the main application window
-            # 3. Pass the API connection object to other modules
+            # 1. Save configuration to a JSON file
+            # 2. Store base URL and route separately
+            # 3. Open the main application window
             
-            self.log_debug("\n" + "="*50)
-            self.log_debug("CONNECTION SAVED SUCCESSFULLY")
-            self.log_debug("="*50)
-            self.log_debug(f"Saved URL: {url}")
-            self.log_debug("Ready to proceed with main application")
+            # Example: Save to config file
+            import json
+            config = {
+                "base_url": base_url,
+                "route": route,
+                "last_tested": datetime.now().isoformat()
+            }
+            
+            try:
+                with open("api_config.json", "w") as f:
+                    json.dump(config, f, indent=2)
+                self.log_debug("\n" + "="*50)
+                self.log_debug("CONFIGURATION SAVED")
+                self.log_debug("="*50)
+                self.log_debug(f"Config saved to: api_config.json")
+                self.log_debug(f"Base URL: {base_url}")
+                self.log_debug(f"Route: {route}")
+                self.log_debug("Ready to proceed with main application")
+            except Exception as e:
+                self.log_debug(f"Error saving config: {str(e)}")
         else:
             messagebox.showwarning("No Connection", 
                                   "Please test and validate the connection first.")

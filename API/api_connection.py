@@ -9,14 +9,17 @@ from typing import Dict, Any, Optional, Tuple
 from requests.exceptions import RequestException, Timeout, ConnectionError
 
 class APIConnection:
-    def __init__(self, api_url: str = None):
+    def __init__(self, base_url: str = None, route: str = "/api/items"):
         """
         Initialize API connection handler
         
         Args:
-            api_url: The API endpoint URL
+            base_url: The base API URL (changes daily)
+            route: The API route/endpoint (remains constant)
         """
-        self.api_url = api_url
+        self.base_url = base_url
+        self.route = route
+        self.api_url = self._build_full_url() if base_url else None
         self.timeout = 10  # Default timeout in seconds
         self.headers = {
             'Content-Type': 'application/json',
@@ -25,9 +28,34 @@ class APIConnection:
         self.last_response = None
         self.last_error = None
     
+    def _build_full_url(self) -> str:
+        """Build the complete URL from base URL and route"""
+        if not self.base_url:
+            return None
+        
+        # Ensure base URL doesn't end with / and route starts with /
+        base = self.base_url.rstrip('/')
+        route = self.route if self.route.startswith('/') else f'/{self.route}'
+        return f"{base}{route}"
+    
+    def set_base_url(self, base_url: str) -> None:
+        """Set or update the base URL and rebuild full URL"""
+        self.base_url = base_url.strip()
+        self.api_url = self._build_full_url()
+    
+    def set_route(self, route: str) -> None:
+        """Set or update the route and rebuild full URL"""
+        self.route = route.strip()
+        self.api_url = self._build_full_url()
+    
     def set_url(self, url: str) -> None:
-        """Set or update the API URL"""
+        """Set the complete API URL (for backward compatibility)"""
         self.api_url = url.strip()
+        # Try to split into base and route
+        if '/api/' in url:
+            parts = url.split('/api/')
+            self.base_url = parts[0]
+            self.route = '/api/' + parts[1]
     
     def validate_url(self, url: str = None) -> Tuple[bool, str]:
         """
